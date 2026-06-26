@@ -1,9 +1,12 @@
 import fs from "node:fs/promises";
+import crypto from "node:crypto";
 import path from "node:path";
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
 const maxBodySize = 18 * 1024 * 1024;
+const studioPassword = process.env.STUDIO_PASSWORD || process.env.VITE_STUDIO_PASSWORD || "marti2026";
+const sessionSecret = process.env.STUDIO_SESSION_SECRET || "local-vite-studio-session";
 const imageTypes = new Map([
   ["image/jpeg", "jpg"],
   ["image/png", "png"],
@@ -50,7 +53,51 @@ function readJsonBody(req) {
 function sendJson(res, status, payload) {
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.setHeader("Cache-Control", "no-store");
   res.end(JSON.stringify(payload));
+}
+
+function timingSafeEqualText(left, right) {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+  return leftBuffer.length === rightBuffer.length && crypto.timingSafeEqual(leftBuffer, rightBuffer);
+}
+
+function makeSessionToken() {
+  const signature = crypto.createHmac("sha256", sessionSecret).update("studio").digest("base64url");
+  return `studio.${signature}`;
+}
+
+function isValidSessionToken(token = "") {
+  return timingSafeEqualText(token, makeSessionToken());
+}
+
+function parseCookies(header = "") {
+  return Object.fromEntries(
+    header
+      .split(";")
+      .map((cookie) => cookie.trim().split("="))
+      .filter(([key, value]) => key && value)
+      .map(([key, value]) => [key, decodeURIComponent(value)]),
+  );
+}
+
+function sendJsonWithCookie(res, status, payload) {
+  res.statusCode = status;
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.setHeader("Set-Cookie", `studio_session=${encodeURIComponent(makeSessionToken())}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800`);
+  res.setHeader("Cache-Control", "no-store");
+  res.end(JSON.stringify(payload));
+}
+
+function requireStudioSession(req, res) {
+  const cookies = parseCookies(req.headers.cookie);
+  if (isValidSessionToken(cookies.studio_session)) {
+    return true;
+  }
+
+  sendJson(res, 401, { error: "Sessio no autoritzada." });
+  return false;
 }
 
 async function writeJsonFile(filePath, value) {
@@ -69,7 +116,39 @@ function createStudioApi(root) {
       return;
     }
 
+    if (req.method === "GET" && (req.url === "/session" || req.url === "/api/studio/session")) {
+      const cookies = parseCookies(req.headers.cookie);
+      sendJson(res, 200, { authenticated: isValidSessionToken(cookies.studio_session) });
+      return;
+    }
+
+    if (req.method === "POST" && (req.url === "/login" || req.url === "/api/studio/login")) {
+      try {
+        const { password = "" } = await readJsonBody(req);
+        if (!timingSafeEqualText(String(password), studioPassword)) {
+          sendJson(res, 401, { error: "Contrasenya incorrecta." });
+          return;
+        }
+
+        sendJsonWithCookie(res, 200, { ok: true });
+      } catch (error) {
+        sendJson(res, 400, { error: error.message });
+      }
+      return;
+    }
+
+    if (req.method === "POST" && (req.url === "/logout" || req.url === "/api/studio/logout")) {
+      res.statusCode = 200;
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.setHeader("Set-Cookie", "studio_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0");
+      res.setHeader("Cache-Control", "no-store");
+      res.end(JSON.stringify({ ok: true }));
+      return;
+    }
+
     if (req.method === "POST" && (req.url === "/posts" || req.url === "/api/studio/posts")) {
+      if (!requireStudioSession(req, res)) return;
+
       try {
         const { posts } = await readJsonBody(req);
         if (!Array.isArray(posts)) {
@@ -86,6 +165,8 @@ function createStudioApi(root) {
     }
 
     if (req.method === "POST" && (req.url === "/images" || req.url === "/api/studio/images")) {
+      if (!requireStudioSession(req, res)) return;
+
       try {
         const { name = "imatge", type = "", dataUrl = "" } = await readJsonBody(req);
         const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);

@@ -28,15 +28,17 @@ Contrasenya per defecte en desenvolupament: `marti2026`
 Per canviar-la:
 
 ```bash
-VITE_STUDIO_PASSWORD=una-contrasenya-forta npm run build
+STUDIO_PASSWORD=una-contrasenya-forta npm run dev
 ```
 
-L'Studio desa els articles al servidor local quan s'executa amb `npm run dev`:
+En produccio, defineix tambe `STUDIO_SESSION_SECRET` amb un valor llarg i aleatori.
 
-- Articles: `public/content/posts.json`
-- Imatges pujades: `public/assets/studio/`
+L'Studio desa els articles i imatges al servidor:
 
-Si l'API local no respon, es conserva una copia al navegador amb `localStorage` per no perdre feina. El control de contrasenya continua sent una proteccio de client; per exposar l'Studio a internet caldria autenticacio real al servidor.
+- En desenvolupament amb `npm run dev`: `public/content/posts.json` i `public/assets/studio/`
+- En produccio amb `npm start`: `studio-data/content/posts.json` i `studio-data/assets/studio/`
+
+El login de `/studio` es valida al servidor i deixa una sessio HTTP-only. Si l'API no respon, es conserva una copia al navegador amb `localStorage` per no perdre feina.
 
 ## Contingut
 
@@ -47,9 +49,20 @@ Si l'API local no respon, es conserva una copia al navegador amb `localStorage` 
 
 ## Desplegament
 
-Puja el contingut de `dist/` al hosting del domini. La web és una SPA, així que cal fallback cap a `index.html` per rutes com `/blog/...` o `/studio`. S'inclouen:
+```bash
+npm ci
+npm run build
+STUDIO_PASSWORD=una-contrasenya-forta STUDIO_SESSION_SECRET=un-secret-llarg npm start
+```
 
-- `public/_redirects` per Netlify-like hosting.
-- `public/.htaccess` per Apache.
+El servidor Node de `server.js` serveix `dist/`, fa fallback cap a `index.html` per rutes SPA com `/blog/...` o `/studio`, i exposa l'API `/api/studio/*`.
+
+Variables d'entorn:
+
+- `PORT`: port HTTP intern. Per defecte `3000`.
+- `HOST`: interfície d'escolta. Per defecte `127.0.0.1`.
+- `STUDIO_PASSWORD`: contrasenya del Studio.
+- `STUDIO_SESSION_SECRET`: secret per signar la sessio.
+- `STUDIO_DATA_DIR`: directori persistent de contingut. Per defecte `studio-data/`.
 
 També hi ha `public/robots.txt`, que desindexa `/studio`.

@@ -18,17 +18,17 @@ import { profile } from "./data/profile.js";
 import { seedPosts } from "./data/posts.js";
 import {
   checkStudioApi,
+  checkStudioSession,
   getServerPosts,
   getStoredPosts,
-  isStudioAuthenticated,
+  loginStudio,
+  logoutStudio,
   saveServerPosts,
   saveStoredPosts,
-  setStudioAuthenticated,
   slugify,
   uploadStudioImage,
 } from "./lib/storage.js";
 
-const studioPassword = import.meta.env.VITE_STUDIO_PASSWORD || "marti2026";
 const ArticleRenderer = lazy(() => import("./components/ArticleRenderer.jsx"));
 
 function MarkdownPreview({ content }) {
@@ -360,7 +360,8 @@ https://twitter.com/OpenAI/status/1731774431678026055`,
 };
 
 function Studio({ customPosts, persist, serverReady, syncError }) {
-  const [authenticated, setAuthenticated] = useState(() => isStudioAuthenticated());
+  const [authenticated, setAuthenticated] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
   const [password, setPassword] = useState("");
   const [draft, setDraft] = useState(emptyDraft);
   const [editingId, setEditingId] = useState(null);
@@ -385,6 +386,26 @@ function Studio({ customPosts, persist, serverReady, syncError }) {
   }, []);
 
   useEffect(() => {
+    let active = true;
+
+    checkStudioSession()
+      .then((valid) => {
+        if (!active) return;
+        setAuthenticated(valid);
+        setCheckingAuth(false);
+      })
+      .catch(() => {
+        if (!active) return;
+        setAuthenticated(false);
+        setCheckingAuth(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
     if (!imageFile) {
       setImagePreview("");
       return undefined;
@@ -395,16 +416,23 @@ function Studio({ customPosts, persist, serverReady, syncError }) {
     return () => URL.revokeObjectURL(url);
   }, [imageFile]);
 
-  const login = (event) => {
+  const login = async (event) => {
     event.preventDefault();
-    if (password === studioPassword) {
-      setStudioAuthenticated(true);
+    try {
+      await loginStudio(password);
       setAuthenticated(true);
       setPassword("");
       setMessage("");
       return;
+    } catch (error) {
+      setMessage(error.message);
     }
-    setMessage("Contrasenya incorrecta.");
+  };
+
+  const logout = async () => {
+    await logoutStudio();
+    setAuthenticated(false);
+    setMessage("");
   };
 
   const updateDraft = (field, value) => setDraft((current) => ({ ...current, [field]: value }));
@@ -510,6 +538,18 @@ function Studio({ customPosts, persist, serverReady, syncError }) {
     reader.readAsText(file);
   };
 
+  if (checkingAuth) {
+    return (
+      <main className="studio-login">
+        <form>
+          <Lock size={28} />
+          <h1>Studio privat</h1>
+          <p>Comprovant sessio...</p>
+        </form>
+      </main>
+    );
+  }
+
   if (!authenticated) {
     return (
       <main className="studio-login">
@@ -564,6 +604,10 @@ function Studio({ customPosts, persist, serverReady, syncError }) {
             Importar
             <input type="file" accept="application/json" onChange={(event) => importJson(event.target.files?.[0])} />
           </label>
+          <button className="button secondary" type="button" onClick={logout}>
+            <Lock size={17} />
+            Sortir
+          </button>
         </div>
       </section>
 

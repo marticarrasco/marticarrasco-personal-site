@@ -1,7 +1,9 @@
 const POSTS_KEY = "marticarrasco.posts";
-const AUTH_KEY = "marticarrasco.studio.auth";
 const SERVER_POSTS_URL = "/content/posts.json";
 const HEALTH_API_URL = "/api/studio/health";
+const SESSION_API_URL = "/api/studio/session";
+const LOGIN_API_URL = "/api/studio/login";
+const LOGOUT_API_URL = "/api/studio/logout";
 const POSTS_API_URL = "/api/studio/posts";
 const IMAGES_API_URL = "/api/studio/images";
 
@@ -39,15 +41,54 @@ export async function checkStudioApi() {
   return response.ok;
 }
 
+export async function checkStudioSession() {
+  const response = await fetch(SESSION_API_URL, {
+    cache: "no-store",
+    credentials: "same-origin",
+  });
+
+  if (!response.ok) {
+    return false;
+  }
+
+  const session = await response.json();
+  return Boolean(session.authenticated);
+}
+
+export async function loginStudio(password) {
+  const response = await fetch(LOGIN_API_URL, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password }),
+  });
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload.error || "No s'ha pogut iniciar sessio.");
+  }
+
+  return response.json();
+}
+
+export async function logoutStudio() {
+  await fetch(LOGOUT_API_URL, {
+    method: "POST",
+    credentials: "same-origin",
+  });
+}
+
 export async function saveServerPosts(posts) {
   const response = await fetch(POSTS_API_URL, {
     method: "POST",
+    credentials: "same-origin",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ posts }),
   });
 
   if (!response.ok) {
-    throw new Error("No s'han pogut guardar els articles al servidor.");
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload.error || "No s'han pogut guardar els articles al servidor.");
   }
 
   return response.json();
@@ -66,6 +107,7 @@ export async function uploadStudioImage(file) {
   const dataUrl = await readFileAsDataUrl(file);
   const response = await fetch(IMAGES_API_URL, {
     method: "POST",
+    credentials: "same-origin",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       name: file.name,
@@ -75,22 +117,11 @@ export async function uploadStudioImage(file) {
   });
 
   if (!response.ok) {
-    throw new Error("No s'ha pogut pujar la imatge al servidor.");
+    const payload = await response.json().catch(() => ({}));
+    throw new Error(payload.error || "No s'ha pogut pujar la imatge al servidor.");
   }
 
   return response.json();
-}
-
-export function isStudioAuthenticated() {
-  return localStorage.getItem(AUTH_KEY) === "true";
-}
-
-export function setStudioAuthenticated(value) {
-  if (value) {
-    localStorage.setItem(AUTH_KEY, "true");
-  } else {
-    localStorage.removeItem(AUTH_KEY);
-  }
 }
 
 export function slugify(value) {
