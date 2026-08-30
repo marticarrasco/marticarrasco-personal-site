@@ -57,6 +57,24 @@ STUDIO_PASSWORD=una-contrasenya-forta STUDIO_SESSION_SECRET=un-secret-llarg npm 
 
 El servidor Node de `server.js` serveix `dist/`, fa fallback cap a `index.html` per rutes SPA com `/blog/...` o `/studio`, i exposa l'API `/api/studio/*`.
 
+### Vercel
+
+La web pública es pot desplegar directament a Vercel. `vercel.json` manté el fallback de les rutes SPA i `api/studio/[action].js` substitueix l'API de `server.js` en producció.
+
+En producció, Vercel no té un disc persistent per guardar fitxers. Per això l'Studio desa els articles i les imatges al repositori de GitHub mitjançant GitHub Contents API. Cada desament crea un commit i Vercel torna a desplegar automàticament el contingut públic.
+
+Variables d'entorn que cal definir al projecte de Vercel:
+
+- `GITHUB_TOKEN`: token fine-grained amb permisos `Contents: Read and write` només sobre aquest repositori.
+- `GITHUB_REPOSITORY`: opcional; per defecte `marticarrasco/marticarrasco-personal-site`.
+- `GITHUB_BRANCH`: opcional; per defecte `main`.
+- `STUDIO_PASSWORD`: contrasenya de l'Studio.
+- `STUDIO_SESSION_SECRET`: secret llarg i aleatori per signar les sessions.
+
+No cal definir `VITE_STUDIO_PASSWORD` a Vercel: la contrasenya només s'utilitza al servidor.
+
+Les pujades d'imatges de l'Studio estan limitades a 3 MB per petició. El token de GitHub no s'ha d'incloure mai al codi ni al repositori.
+
 Variables d'entorn:
 
 - `PORT`: port HTTP intern. Per defecte `3000`.

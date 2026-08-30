@@ -582,9 +582,10 @@ function Studio({ customPosts, persist, serverReady, syncError }) {
           <p className="section-kicker">Studio</p>
           <h1>Editor d'articles</h1>
           <p>
-            Markdown, LaTeX, imatges i tweets. Els articles es desen a
-            <code> public/content/posts.json</code> i les imatges a
-            <code> public/assets/studio/</code> quan el servidor local esta actiu.
+            Markdown, LaTeX, imatges i tweets. En producció, els articles i les
+            imatges es desen a GitHub i Vercel publica automàticament els canvis.
+            En local es desen a <code> public/content/posts.json</code> i
+            <code> public/assets/studio/</code>.
           </p>
           <p className={serverReady ? "sync-status online" : "sync-status offline"}>
             {serverReady ? "Servidor connectat" : syncError || "Servidor pendent"}
